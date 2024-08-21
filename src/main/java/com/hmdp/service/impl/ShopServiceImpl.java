@@ -163,8 +163,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             return shop;
         }
         //尝试获取锁
-        String lockKey;
-        lockKey = LOCK_SHOP_KEY + id;
+        String lockKey = LOCK_SHOP_KEY + id;
         boolean tryLock = tryLock(lockKey);
         if (!tryLock) {
             //没获取到锁，不用等待，直接返回店铺信息（旧）
