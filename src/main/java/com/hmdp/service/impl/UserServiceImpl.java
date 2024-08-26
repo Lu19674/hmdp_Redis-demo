@@ -60,7 +60,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
     @Override//发送手机验证码
     public Result sendCode(String phone, HttpSession session) {
         //1.校验手机号
-        if (!RegexUtils.isPhoneInvalid(phone)) {
+        if (RegexUtils.isPhoneInvalid(phone)) {
             //不符合，返回错误信息
             return Result.fail("手机格式错误！请重新输入");
         }
@@ -89,8 +89,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         if (StringUtil.isNullOrEmpty(cacheCode)) {
             return Result.fail("无效验证码，过期或有误。");
         }
-        if (!RegexUtils.isPhoneInvalid(phone)) {
-            //手机号不符合，返回错误信息
+        if (RegexUtils.isPhoneInvalid(phone)) {
+            //手机号不符合，删除 code ， 返回错误信息
+            template.delete(LOGIN_CODE_KEY + phone);
             return Result.fail("手机格式错误！请重新输入");
         } else if (!loginForm.getCode().equals(cacheCode)) {
             //验证码错误，返回错误信息
