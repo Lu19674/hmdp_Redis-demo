@@ -114,7 +114,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                     .build();
             save(user);// mp 插入一条数据到库中
         }
-
+        user = lambdaQuery()
+                .eq(User::getPhone, phone)
+                .one();
         //5.保存用户到Redis
         //5.1用 UUID 随机生成 key （token）
         String token = UUID.randomUUID().toString(true);

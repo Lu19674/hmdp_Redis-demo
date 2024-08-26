@@ -143,18 +143,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                             StreamReadOptions.empty().count(1).block(Duration.ofSeconds(2)),//读取数，等待时间
                             StreamOffset.create(queueName, ReadOffset.lastConsumed())
                     );
-
                     //2.判断消息是否获取成功
                     if(list == null || list.isEmpty()){
                         // 获取失败，没有消息，继续下一次循环
-                        log.info("获取失败，没有消息，继续下一次循环");
                         continue;
                     }
                     //3.解析消息订单信息
                     MapRecord<String, Object, Object> record = list.get(0);
                     Map<Object, Object> map = record.getValue();
                     VoucherOrder voucherOrder = BeanUtil.fillBeanWithMap(map, new VoucherOrder(), true);//map -> bean
-
                     //4.创建订单
                     handleVoucherOrder(voucherOrder);
 
@@ -177,7 +174,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                             StreamReadOptions.empty().count(1),//读取数，等待时间
                             StreamOffset.create(queueName, ReadOffset.from("0"))
                     );
-
                     //2.判断消息是否获取成功
                     if(list == null || list.isEmpty()){
                         // 获取失败，pending-list没有异常消息，退出异常获取循环
@@ -187,7 +183,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                     MapRecord<String, Object, Object> record = list.get(0);
                     Map<Object, Object> map = record.getValue();
                     VoucherOrder voucherOrder = BeanUtil.fillBeanWithMap(map, new VoucherOrder(), true);//map -> bean
-
                     //4.创建订单
                     handleVoucherOrder(voucherOrder);
 
@@ -196,7 +191,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
                 } catch (Exception e) {
                     log.error("处理pending-list订单异常",e);
                     try {
-                        Thread.sleep(2000);
+                        Thread.sleep(20000);
                     } catch (InterruptedException interruptedException) {
                         interruptedException.printStackTrace();
                     }
@@ -204,8 +199,6 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             }
         }
     }
-
-
 
 
     /*//内部类实现线程任务（基于阻塞队列）
