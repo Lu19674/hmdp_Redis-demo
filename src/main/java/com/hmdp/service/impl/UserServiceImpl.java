@@ -2,7 +2,9 @@ package com.hmdp.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.lang.UUID;
+import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -13,9 +15,11 @@ import com.hmdp.entity.User;
 import com.hmdp.mapper.UserMapper;
 import com.hmdp.service.IUserService;
 import com.hmdp.utils.RegexUtils;
+import com.hmdp.utils.UserHolder;
 import io.netty.util.internal.StringUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.connection.BitFieldSubCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -23,7 +27,10 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -148,5 +155,72 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             template.delete(LOGIN_USER_KEY + token); //删除Redis中user对应的token值
         }
         return Result.ok();
+    }
+
+    /**
+     * 用户签到
+     * @return
+     */
+    @Override
+    public Result sign() {
+        //1.获取当前登录用户
+        Long userId = UserHolder.getUser().getId();
+        //2.获取当前日期
+        LocalDateTime now = LocalDateTime.now();
+        //3.拼接key（月份+用户id）
+        String keySuffix = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+        String key = USER_SIGN_KEY + userId + keySuffix;
+        //4.获取今天是本月的第几天
+        int dayOfMonth = now.getDayOfMonth(); // 此获取到的是 1-31 ，Redis的BitMap数据是0-30，因此写入时要减一
+        //5.写入Redis （SETBIT key offset 1）
+        template.opsForValue().setBit(key,dayOfMonth-1,true);
+        return Result.ok();
+
+    }
+
+    /**
+     * 统计截至用户连续签到天数
+     * @return
+     */
+    @Override
+    public Result signCount() {
+        //1.获取当前登录用户
+        Long userId = UserHolder.getUser().getId();
+        //2.获取当前日期
+        LocalDateTime now = LocalDateTime.now();
+        //3.拼接key（月份+用户id）
+        String keySuffix = now.format(DateTimeFormatter.ofPattern(":yyyyMM"));
+        String key = USER_SIGN_KEY + userId + keySuffix;
+        //4.获取今天是本月的第几天
+        int dayOfMonth = now.getDayOfMonth();
+        //5.获取本月截至今天为止的所有签到记录，返回的是一个十进制数据
+        List<Long> result = template.opsForValue().bitField( //BITFIELD sign:{userId}:{keySuffix} GET u{dayOfMonth} 0
+                key,
+                BitFieldSubCommands.create()
+                        .get(BitFieldSubCommands.BitFieldType.unsigned(dayOfMonth)).valueAt(0)
+        );
+        if(CollectionUtil.isEmpty(result))
+            //没有任何签到结果
+            return Result.ok(0);
+        Long num = result.get(0);
+        if(num==null||num==0)
+            return Result.ok(0);
+        //6.循环遍历
+        int count;//统计num数字从右往左有多少个“1”bit位（连续签到多少天）
+        if((num&1)==0) count =0;//今天没签到的计数器初始值
+        else count=1;//今天签到了的计数器初始值
+        num>>>=1;//先把数字右移一位，排除掉今天，从昨天向前开始统计
+        while(true){
+            //6.1让数字与1做 与 运算 ，得到数字的最后一个bit位 //再判断这个bit位是否为0
+            if((num&1)==0)
+                //如果为0，则未签到，结束
+                break;
+            else
+                //为1，已签到，计数+1
+                count++;
+            //把数字右移一位，抛弃最后一个bit位，继续下一个bit位
+            num>>>=1; //或 ： num/=2;
+        }
+        return Result.ok(count);
     }
 }
